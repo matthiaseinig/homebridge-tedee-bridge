@@ -1,0 +1,1 @@
+{"version":3,"file":"lock-status-changed-event.d.ts","sourceRoot":"","sources":["../../../src/clients/models/lock-status-changed-event.ts"],"names":[],"mappings":"AAAA,OAAO,EAAC,iBAAiB,EAAC,MAAM,uBAAuB,CAAC;AACxD,OAAO,EAAC,SAAS,EAAC,MAAM,cAAc,CAAC;AAEvC,MAAM,WAAW,sBAAuB,SAAQ,iBAAiB;IAC/D,KAAK,EAAE,SAAS,CAAC;IACjB,MAAM,EAAE,CAAC,GAAG,CAAC,CAAC;CACf"}

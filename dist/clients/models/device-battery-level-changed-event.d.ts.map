@@ -1,0 +1,1 @@
+{"version":3,"file":"device-battery-level-changed-event.d.ts","sourceRoot":"","sources":["../../../src/clients/models/device-battery-level-changed-event.ts"],"names":[],"mappings":"AAAA,OAAO,EAAC,iBAAiB,EAAC,MAAM,uBAAuB,CAAC;AAExD,MAAM,WAAW,8BAA+B,SAAQ,iBAAiB;IACvE,YAAY,EAAE,MAAM,CAAC;CACtB"}

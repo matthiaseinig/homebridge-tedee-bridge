@@ -3,8 +3,8 @@ config.json
 persist
 accessories
 
-# Ignore compiled code
-dist
+# Compiled output is committed on the multi-bridge-support branch so the
+# plugin can be installed directly from git without a build step.
 
 # ------------- Defaults ------------- #
 
@@ -91,7 +91,6 @@ web_modules/
 
 # Nuxt.js build / generate output
 .nuxt
-dist
 
 # Gatsby files
 .cache/

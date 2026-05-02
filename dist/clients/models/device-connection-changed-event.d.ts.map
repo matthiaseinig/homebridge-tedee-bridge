@@ -1,0 +1,1 @@
+{"version":3,"file":"device-connection-changed-event.d.ts","sourceRoot":"","sources":["../../../src/clients/models/device-connection-changed-event.ts"],"names":[],"mappings":"AAAA,OAAO,EAAC,iBAAiB,EAAC,MAAM,uBAAuB,CAAC;AAExD,MAAM,WAAW,4BAA6B,SAAQ,iBAAiB;IACrE,WAAW,EAAE,CAAC,GAAG,CAAC,CAAC;CACpB"}
