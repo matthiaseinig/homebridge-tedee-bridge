@@ -8,6 +8,23 @@ The Tedee smart lock is exposed as a lock in HomeKit with support for:
 - Lock/Unlock/Unlatch
 - Battery status
 
+## About this fork
+
+This is a fork of [lpostiglione/homebridge-tedee-bridge](https://github.com/lpostiglione/homebridge-tedee-bridge) that adds **support for running more than one Tedee bridge** in the same Homebridge instance. The upstream plugin is hard-coded to a single bridge.
+
+Differences vs. upstream:
+
+| Area | Upstream | This fork |
+|------|----------|-----------|
+| Number of bridges per Homebridge instance | One only — schema is marked `singular: true` and the UI hides additional entries | Any number — add one platform block per bridge |
+| Config persistence (`saveAddr`) | Always overwrites the **first** `TedeeBridge` entry in `config.json` after bridge discovery, so multiple instances clobber each other | Matches each instance's own platform block by its `name` field |
+| Webhook port collision | Crashes silently when the default port `3003` is already in use | Logs an actionable error pointing at the `webhookPort` setting |
+| Required config | `apiKey` only | `apiKey` and `name` (the `name` must be unique per bridge) |
+
+If you only run a single Tedee bridge, this fork behaves identically to upstream — just make sure your platform entry has a `name`.
+
+See the [Running Multiple Bridges](#running-multiple-bridges) section below for the multi-bridge config format.
+
 ## Installation
 
 Please install the plugin with the following command:
