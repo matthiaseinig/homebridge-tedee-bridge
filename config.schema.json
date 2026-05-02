@@ -3,10 +3,16 @@
   "pluginType": "platform",
   "headerDisplay": "Connect your Tedee smart locks with homebridge.",
   "footerDisplay": "The Tedee bridge is required for this plugin to work.",
-  "singular": true,
   "schema": {
     "type": "object",
     "properties": {
+      "name": {
+        "title": "Platform name",
+        "type": "string",
+        "required": true,
+        "default": "TedeeBridge",
+        "description": "A unique name for this bridge instance. Required when running more than one Tedee bridge — must differ between instances."
+      },
       "bridgeIp": {
         "title": "The local Bridge IP",
         "type": "string",

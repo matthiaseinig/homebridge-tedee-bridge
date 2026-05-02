@@ -357,8 +357,15 @@ export class HomebridgeTedeePlatform implements DynamicPlatformPlugin {
     }
 
     this.log.info(`Starting webhook server on port ${this.config.webhookPort}...`);
-    this._server = createServer((req, res) => this.handleWebhook(req, res))
-      .listen(this.config.webhookPort);
+    this._server = createServer((req, res) => this.handleWebhook(req, res));
+    this._server.on('error', (e: NodeJS.ErrnoException) => {
+      if (e.code === 'EADDRINUSE') {
+        this.log.error(`Webhook port ${this.config.webhookPort} is already in use. When running multiple TedeeBridge instances, set a different "webhookPort" for each.`);
+      } else {
+        this.log.error(`Webhook server error: ${e.message}`);
+      }
+    });
+    this._server.listen(this.config.webhookPort);
     this.log.info(`Webhook server started successfully!`);
 
     this.log.info(`Registering webhook callback...`);
@@ -404,13 +411,21 @@ export class HomebridgeTedeePlatform implements DynamicPlatformPlugin {
       // Parse the current configuration
       let config = JSON.parse(data);
 
-      // Find the platform with "platform" key equals "TedeeBridge"
-      let targetPlatform = config.platforms.find(p => p.platform === PLATFORM_NAME);
+      // Find this platform's own config block. With multiple instances we must
+      // match on name as well, otherwise every instance would overwrite the
+      // bridgeIp of the first TedeeBridge entry.
+      const matching = config.platforms.filter(p => p.platform === PLATFORM_NAME);
+      let targetPlatform;
+      if (matching.length <= 1) {
+        targetPlatform = matching[0];
+      } else {
+        targetPlatform = matching.find(p => p.name === this.config.name);
+      }
       if (targetPlatform) {
         targetPlatform.bridgeIp = addr;
         this.log.debug('Updated config with new IP:', targetPlatform.bridgeIp);
       } else {
-        this.log.debug('No matching platform found.');
+        this.log.debug(`No matching platform found for name "${this.config.name}". Set a unique "name" on each TedeeBridge platform when running multiple instances.`);
         return;
       }
 
