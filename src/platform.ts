@@ -273,7 +273,7 @@ export class HomebridgeTedeePlatform implements DynamicPlatformPlugin {
     const validUuids: string[] = [];
 
     for (const lock of locks) {
-      let deviceConfiguration = this.config.devices.find(l => l.name === lock.name);
+      let deviceConfiguration = this.config.devices?.find(l => l.name === lock.name);
       if (!deviceConfiguration) {
         deviceConfiguration = {
           name: lock.name,

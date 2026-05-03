@@ -217,11 +217,12 @@ class HomebridgeTedeePlatform {
         });
     }
     registerLocks(locks) {
+        var _a;
         // loop over the discovered devices and register each one if it has not already been registered
         let hasLocks = false;
         const validUuids = [];
         for (const lock of locks) {
-            let deviceConfiguration = this.config.devices.find(l => l.name === lock.name);
+            let deviceConfiguration = (_a = this.config.devices) === null || _a === void 0 ? void 0 : _a.find(l => l.name === lock.name);
             if (!deviceConfiguration) {
                 deviceConfiguration = {
                     name: lock.name,
