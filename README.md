@@ -23,6 +23,7 @@ npm install -g homebridge-tedee-bridge
   "platforms": [
     {
       "platform": "TedeeBridge",
+      "name": "TedeeBridge",
       "apiKey": "TEDEE-API-KEY",
       "devices": [
         {
@@ -43,15 +44,45 @@ npm install -g homebridge-tedee-bridge
 
 #### Platform
 
-| Parameter         | Required | Description                                                                                 |
-|-------------------|----------|---------------------------------------------------------------------------------------------|
-| `platform`        | **Yes**  | The platform name, should be "TedeeBridge"                                                  |
-| `apiKey`          | **Yes**  | The API key for your Tedee bridge                                                           |
-| `devices`         | No       | Array of your devices managed by the bridge                                                 |
-| `bridgeIp`        | No       | The IP address of your Tedee bridge                                                         |
-| `maximumApiRetry` | No       | The amount of attempts to call the Bridge API. Defaults to `3` attempts (incl. initial one) |
-| `timeout`         | No       | The timeout for the API calls in milliseconds. Defaults to `10000` ms                       |
-| `webhookPort`     | No       | The port on which the callback server should listen. Defaults to `3003`                     |
+| Parameter         | Required | Description                                                                                                                |
+|-------------------|----------|----------------------------------------------------------------------------------------------------------------------------|
+| `platform`        | **Yes**  | The platform name, should be "TedeeBridge"                                                                                 |
+| `name`            | **Yes**  | A unique name for this bridge instance. When running multiple Tedee bridges, this **must** differ between platform blocks. |
+| `apiKey`          | **Yes**  | The API key for your Tedee bridge                                                                                          |
+| `devices`         | No       | Array of your devices managed by the bridge                                                                                |
+| `bridgeIp`        | No       | The IP address of your Tedee bridge                                                                                        |
+| `maximumApiRetry` | No       | The amount of attempts to call the Bridge API. Defaults to `3` attempts (incl. initial one)                                |
+| `timeout`         | No       | The timeout for the API calls in milliseconds. Defaults to `10000` ms                                                      |
+| `webhookPort`     | No       | The port on which the callback server should listen. Defaults to `3003`                                                    |
+
+### Running Multiple Bridges
+
+To use this plugin with more than one Tedee bridge, add one platform block per bridge to your `config.json` and make sure each one has:
+
+* a unique `name`
+* a unique `webhookPort` (otherwise the second instance will fail with `EADDRINUSE`)
+* an explicit `bridgeIp` (auto-discovery may otherwise pick the same bridge for both instances)
+
+```json
+{
+  "platforms": [
+    {
+      "platform": "TedeeBridge",
+      "name": "Tedee Home",
+      "apiKey": "API-KEY-1",
+      "bridgeIp": "192.168.0.20",
+      "webhookPort": 3003
+    },
+    {
+      "platform": "TedeeBridge",
+      "name": "Tedee Office",
+      "apiKey": "API-KEY-2",
+      "bridgeIp": "192.168.0.21",
+      "webhookPort": 3004
+    }
+  ]
+}
+```
 
 ##### Device
 
