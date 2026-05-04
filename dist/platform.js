@@ -64,7 +64,7 @@ class HomebridgeTedeePlatform {
                 .then((addr) => {
                 this.connectBridge(addr);
                 this.discoverDevices();
-            }, (e) => {
+            }, () => {
                 this.log.warn('Failed to discover bridge!');
             });
         });
@@ -82,7 +82,7 @@ class HomebridgeTedeePlatform {
         this.accessories.push(accessory);
     }
     discoverBridge() {
-        this.log.info(`Discovering tedee bridge...`);
+        this.log.info('Discovering tedee bridge...');
         return new Promise((resolve, reject) => {
             if (this.config.bridgeIp) {
                 // Proceed with the provided IP
@@ -136,7 +136,7 @@ class HomebridgeTedeePlatform {
                         reject(new Error('No bridge found in the network'));
                         return;
                     }
-                    const nextAddr = next.reverse && next.reverse != '' ? next.reverse : next.ip;
+                    const nextAddr = next.reverse && next.reverse !== '' ? next.reverse : next.ip;
                     this.checkForBridgeApi(nextAddr)
                         .then((addr) => resolve(addr), () => {
                         checkNext(results);
@@ -170,7 +170,7 @@ class HomebridgeTedeePlatform {
         let networkConfig = '';
         // Iterate through each network interface
         for (const iface of Object.values(interfaces)) {
-            // @ts-ignore
+            // @ts-expect-error iface is possibly undefined per Node typings
             for (const config of iface) {
                 // Check if the address is IPv4 and not an internal (loopback) address
                 if (config.family === 'IPv4' && !config.internal) {
@@ -295,15 +295,16 @@ class HomebridgeTedeePlatform {
         this._server = (0, http_1.createServer)((req, res) => this.handleWebhook(req, res));
         this._server.on('error', (e) => {
             if (e.code === 'EADDRINUSE') {
-                this.log.error(`Webhook port ${this.config.webhookPort} is already in use. When running multiple TedeeBridge instances, set a different "webhookPort" for each.`);
+                this.log.error(`Webhook port ${this.config.webhookPort} is already in use. ` +
+                    'When running multiple TedeeBridge instances, set a different "webhookPort" for each.');
             }
             else {
                 this.log.error(`Webhook server error: ${e.message}`);
             }
         });
         this._server.listen(this.config.webhookPort);
-        this.log.info(`Webhook server started successfully!`);
-        this.log.info(`Registering webhook callback...`);
+        this.log.info('Webhook server started successfully!');
+        this.log.info('Registering webhook callback...');
         const webhookUrl = `http://${this.getHomebridgeIpAddress()}:${this.config.webhookPort}/`;
         this.log.debug(`Webhook URL: ${webhookUrl}`);
         this.apiClient.setMultipleCallbacks([{
@@ -312,7 +313,7 @@ class HomebridgeTedeePlatform {
                 headers: [],
             }]).then(callback => {
             this.log.debug(`Callback response: ${JSON.stringify(callback)}`);
-            this.log.info(`Webhook callback registered successfully!`);
+            this.log.info('Webhook callback registered successfully!');
             this.log.debug(`Callback ID: ${callback[0]}`);
             this.callbackId = callback[0];
         }).catch(e => {
@@ -324,7 +325,7 @@ class HomebridgeTedeePlatform {
     getHomebridgeIpAddress() {
         const networkInterfaces = os_1.default.networkInterfaces();
         for (const name of Object.keys(networkInterfaces)) {
-            // @ts-ignore
+            // @ts-expect-error networkInterfaces[name] is possibly undefined per Node typings
             for (const net of networkInterfaces[name]) {
                 // Skip over non-IPv4 and internal (i.e. 127.0.0.1) addresses
                 if (net.family === 'IPv4' && !net.internal) {
@@ -341,7 +342,7 @@ class HomebridgeTedeePlatform {
                 return;
             }
             // Parse the current configuration
-            let config = JSON.parse(data);
+            const config = JSON.parse(data);
             // Find this platform's own config block. With multiple instances we must
             // match on name as well, otherwise every instance would overwrite the
             // bridgeIp of the first TedeeBridge entry.
@@ -358,7 +359,8 @@ class HomebridgeTedeePlatform {
                 this.log.debug('Updated config with new IP:', targetPlatform.bridgeIp);
             }
             else {
-                this.log.debug(`No matching platform found for name "${this.config.name}". Set a unique "name" on each TedeeBridge platform when running multiple instances.`);
+                this.log.debug(`No matching platform found for name "${this.config.name}". ` +
+                    'Set a unique "name" on each TedeeBridge platform when running multiple instances.');
                 return;
             }
             // Write the modified configuration back to the file
@@ -379,20 +381,20 @@ class HomebridgeTedeePlatform {
             body += chunk;
         }
         const payload = JSON.parse(body);
-        if (payload.event == 'backend-connection-changed' || payload.event == 'device-connection-changed') {
-            if (payload.event == 'backend-connection-changed') {
-                // @ts-ignore
+        if (payload.event === 'backend-connection-changed' || payload.event === 'device-connection-changed') {
+            if (payload.event === 'backend-connection-changed') {
+                // @ts-expect-error payload.data is a discriminated union; isConnected exists on this branch
                 this.log.info('Webhook: Backend ' + (payload.data.isConnected ? 'connected' : 'disconnected'));
             }
             else {
-                // @ts-ignore
+                // @ts-expect-error payload.data is a discriminated union; deviceId/isConnected exist on this branch
                 this.log.info('Webhook: Device with id ' + payload.data.deviceId + ' ' + (payload.data.isConnected ? 'connected' : 'disconnected'));
             }
             res.statusCode = 200;
             res.end('Nevermind ;)');
             return;
         }
-        // @ts-ignore
+        // @ts-expect-error payload.data is narrowed by the runtime event check above
         const data = payload.data;
         // Identify the lock that needs to be updated
         const lock = this.activeLocks.find(lock => lock.accessory.context.device.id === data.deviceId);
@@ -418,12 +420,10 @@ class HomebridgeTedeePlatform {
                 break;
             case 'device-battery-level-changed':
                 this.log.info('Webhook: Battery level changed for device with id ' + data.deviceId);
-                // @ts-ignore
                 lock.updateBattery(data.batteryLevel);
                 break;
             case 'lock-status-changed':
                 this.log.info('Webhook: Lock status changed for device with id ' + data.deviceId);
-                // @ts-ignore
                 lock.updateState(data.state, data.jammed);
                 break;
             default:
@@ -437,7 +437,7 @@ class HomebridgeTedeePlatform {
     }
     shutdown() {
         if (this.callbackId) {
-            this.log.info(`Deleting webhook callback...`);
+            this.log.info('Deleting webhook callback...');
             this.apiClient.deleteCallback(this.callbackId)
                 .then(() => {
                 this.log.debug('Webhook callback deleted successfully!');
@@ -449,7 +449,7 @@ class HomebridgeTedeePlatform {
         }
         // Close the server
         if (this._server) {
-            this.log.info(`Shutting down webhook server...`);
+            this.log.info('Shutting down webhook server...');
             this.server.close((e) => {
                 if (e) {
                     this.log.error('Failed to shut down webhook server!');

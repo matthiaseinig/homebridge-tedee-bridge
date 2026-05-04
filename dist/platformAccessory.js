@@ -26,15 +26,22 @@ class LockAccessory {
         // set accessory information
         this.accessory.getService(this.platform.Service.AccessoryInformation)
             .setCharacteristic(this.platform.Characteristic.Manufacturer, 'tedee')
-            .setCharacteristic(this.platform.Characteristic.Model, this.accessory.context.device.type == 2 ? 'Lock PRO' : 'Lock GO')
+            .setCharacteristic(this.platform.Characteristic.Model, this.accessory.context.device.type === 2 ? 'Lock PRO' : 'Lock GO')
             .setCharacteristic(this.platform.Characteristic.SerialNumber, this.accessory.context.device.serialNumber)
             .setCharacteristic(this.platform.Characteristic.FirmwareRevision, this.accessory.context.device.version)
             .setCharacteristic(this.platform.Characteristic.HardwareRevision, this.accessory.context.device.deviceRevision.toString());
-        this.state.isJammed = this.accessory.context.device.jammed == 1 || this.accessory.context.device.state == 0 || this.accessory.context.device.state == 1;
-        this.state.state = this.accessory.context.device.state;
-        this.state.isOperating = !(this.state.state == 0 || this.state.state == 2 || this.state.state == 3 || this.state.state == 6 || this.state.state == 9);
+        const ctxDevice = this.accessory.context.device;
+        this.state.isJammed = ctxDevice.jammed === 1 || ctxDevice.state === 0 || ctxDevice.state === 1;
+        this.state.state = ctxDevice.state;
+        this.state.isOperating = !(this.state.state === 0 ||
+            this.state.state === 2 ||
+            this.state.state === 3 ||
+            this.state.state === 6 ||
+            this.state.state === 9);
         // get the LockMechanism service if it exists, otherwise create a new LockMechanism service
-        this.service = this.accessory.getService(this.platform.Service.LockMechanism) || this.accessory.addService(this.platform.Service.LockMechanism);
+        this.service =
+            this.accessory.getService(this.platform.Service.LockMechanism) ||
+                this.accessory.addService(this.platform.Service.LockMechanism);
         this.service.setCharacteristic(this.platform.Characteristic.Name, this.name);
         this.service.getCharacteristic(this.platform.Characteristic.LockCurrentState)
             .onGet(this.handleLockCurrentStateGet.bind(this));
@@ -42,7 +49,7 @@ class LockAccessory {
             .onGet(this.handleLockTargetStateGet.bind(this))
             .onSet(this.handleLockTargetStateSet.bind(this));
         this.state.batteryLevel = this.accessory.context.device.batteryLevel;
-        this.state.isCharging = this.accessory.context.device.isCharging == 1;
+        this.state.isCharging = this.accessory.context.device.isCharging === 1;
         this.battery = this.accessory.getService(this.platform.Service.Battery) || this.accessory.addService(this.platform.Service.Battery);
         this.battery.getCharacteristic(this.platform.Characteristic.StatusLowBattery)
             .onGet(this.handleStatusLowBatteryGet.bind(this));
@@ -190,15 +197,15 @@ class LockAccessory {
         this.battery.updateCharacteristic(this.platform.Characteristic.StatusLowBattery, this.handleStatusLowBatteryGet());
     }
     updateCharging(isCharging) {
-        this.state.isCharging = isCharging == 1;
+        this.state.isCharging = isCharging === 1;
         this.battery.updateCharacteristic(this.platform.Characteristic.ChargingState, this.handleStatusChargingStateGet());
     }
     updateState(state, jammed) {
-        if (state == 0 || state == 2 || state == 3 || state == 6 || state == 9) {
+        if (state === 0 || state === 2 || state === 3 || state === 6 || state === 9) {
             this.state.isOperating = false;
         }
         this.state.state = state;
-        this.state.isJammed = jammed == 1 || state == 0 || state == 1;
+        this.state.isJammed = jammed === 1 || state === 0 || state === 1;
         this.service.updateCharacteristic(this.platform.Characteristic.LockCurrentState, this.handleLockCurrentStateGet());
         this.service.updateCharacteristic(this.platform.Characteristic.LockTargetState, this.handleLockTargetStateGet());
     }

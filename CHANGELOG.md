@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.1] - 2026-05-04
+
+### Changed
+- Widened `engines.node` to `^18.20.4 || ^20.15.1 || ^22 || ^24` to silence the engine warning on newer Node versions (Homebridge OS now ships Node 24).
+- Widened `engines.homebridge` to `^1.6.0 || ^2.0.0-beta.0` for Homebridge v2 compatibility. The plugin already uses the v2-compatible `Service.Battery` API (no code changes were needed).
+
 ## [2.1.0] - 2026-05-02
 
 ### Added
