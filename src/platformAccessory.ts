@@ -3,6 +3,7 @@ import {CharacteristicValue, PlatformAccessory, Service} from 'homebridge';
 import {HomebridgeTedeePlatform} from './platform';
 import {Lock} from './clients/models/lock';
 import {LockState} from './clients/models/lock-state';
+import {mapCurrentState, mapTargetState, resolveBatteryLevel, TARGET_SECURED} from './lockMapping';
 
 /**
  * Platform Accessory
@@ -24,6 +25,7 @@ export class LockAccessory {
     isJammed: false,
     state: 9,
     batteryLevel: 100,
+    lastTarget: TARGET_SECURED as number,
     isCharging: false,
   };
 
@@ -58,7 +60,7 @@ export class LockAccessory {
       .onGet(this.handleLockTargetStateGet.bind(this))
       .onSet(this.handleLockTargetStateSet.bind(this));
 
-    this.state.batteryLevel = this.accessory.context.device.batteryLevel;
+    this.state.batteryLevel = resolveBatteryLevel(this.accessory.context.device.batteryLevel, this.state.batteryLevel);
     this.state.isCharging = this.accessory.context.device.isCharging == 1;
 
     this.battery = this.accessory.getService(this.platform.Service.Battery) || this.accessory.addService(this.platform.Service.Battery);
@@ -132,53 +134,17 @@ export class LockAccessory {
   }
 
   handleLockCurrentStateGet() {
-    if (this.state.isJammed) {
-      return this.platform.Characteristic.LockCurrentState.JAMMED;
-    }
-
-    switch (this.state.state) {
-      case 0: // Uncalibrated
-      case 1: // Calibrating
-        return this.platform.Characteristic.LockCurrentState.JAMMED;
-      case 2: // Open
-      case 5: // Closing
-      case 7: // Unlatched
-      case 8: // Unlatching
-      case 255: // Latching
-        return this.platform.Characteristic.LockCurrentState.UNSECURED;
-      case 3: // Half-closed
-      case 4: // Opening
-      case 6: // Closed
-        return this.platform.Characteristic.LockCurrentState.SECURED;
-      case 9: // Unknown
-      default:
-        return this.platform.Characteristic.LockCurrentState.UNKNOWN;
-    }
+    return mapCurrentState(this.state.state, this.state.isJammed);
   }
 
   handleLockTargetStateGet() {
-    if (this.state.isJammed) {
-      return this.platform.Characteristic.LockCurrentState.JAMMED;
+    const target = mapTargetState(this.state.state, this.state.isJammed);
+    if (target !== undefined) {
+      this.state.lastTarget = target;
     }
 
-    switch (this.state.state) {
-      case 0: // Uncalibrated
-      case 1: // Calibrating
-        return this.platform.Characteristic.LockCurrentState.JAMMED;
-      case 2: // Open
-      case 4: // Opening
-      case 7: // Unlatched
-      case 8: // Unlatching
-      case 255: // Latching
-        return this.platform.Characteristic.LockCurrentState.UNSECURED;
-      case 3: // Half-closed
-      case 5: // Closing
-      case 6: // Closed
-        return this.platform.Characteristic.LockCurrentState.SECURED;
-      case 9: // Unknown
-      default:
-        return this.platform.Characteristic.LockCurrentState.UNKNOWN;
-    }
+    // Never JAMMED or UNKNOWN here (HomeKit only allows 0 or 1): keep the last legal target.
+    return this.state.lastTarget;
   }
 
   /**
@@ -221,7 +187,8 @@ export class LockAccessory {
   }
 
   public updateBattery(batteryLevel: number) {
-    this.state.batteryLevel = batteryLevel;
+    // Tedee reports 255 for an unknown level: keep the last known value instead of pushing it.
+    this.state.batteryLevel = resolveBatteryLevel(batteryLevel, this.state.batteryLevel);
 
     this.battery.updateCharacteristic(this.platform.Characteristic.BatteryLevel, this.handleStatusBatteryLevelGet());
     this.battery.updateCharacteristic(this.platform.Characteristic.StatusLowBattery, this.handleStatusLowBatteryGet());
