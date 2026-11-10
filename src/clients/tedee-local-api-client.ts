@@ -1,6 +1,8 @@
 import axios, {AxiosError, AxiosInstance, InternalAxiosRequestConfig} from 'axios';
 import {createHash} from 'crypto';
+import {format} from 'util';
 import {CallbackData} from './models/callback-data';
+import {createSecretRedactor, describeError} from '../redaction';
 
 interface CustomInternalAxiosRequestConfig extends InternalAxiosRequestConfig {
   retriesCount?: number; // Optional property to track retries
@@ -32,13 +34,17 @@ export class TedeeLocalApiClient {
       timeout: timeout,
     });
 
-    this.error = error ?? ((e) => {
+    // Everything the client reports goes through the redactor, so the key and the api_token
+    // never leave the client in a message, even when the bridge reflects request headers.
+    const redact = createSecretRedactor(() => [this.apiKey]);
+    const errorSink = error ?? ((e) => {
       void (e);
     });
-
-    this.debug = debug ?? ((e) => {
+    const debugSink = debug ?? ((e) => {
       void (e);
     });
+    this.error = (d) => errorSink(redact(format(d)));
+    this.debug = (d) => debugSink(redact(format(d)));
 
     this.client.interceptors.request.use((config) => this.appendAuthHeader(config));
     this.client.interceptors.response.use((response) => response, (error) => this.handleErrorWithRetry(error));
@@ -94,7 +100,8 @@ export class TedeeLocalApiClient {
 
   private handleError(error) {
     this.error(error.response?.data || error.message);
-    this.debug(JSON.stringify(error));
+    // Never dump the whole error: an AxiosError carries the request config, including the api_token header.
+    this.debug(describeError(error));
     return Promise.reject(error.response?.data || error.message);
   }
 
