@@ -8,6 +8,7 @@ import {createServer, IncomingMessage, Server, ServerResponse} from 'http';
 import {WebhookPayload} from './clients/models/webhook-payload';
 import Evilscan from 'evilscan';
 import fs from 'fs';
+import {createRedactingLogger, createSecretRedactor} from './redaction';
 
 /**
  * HomebridgePlatform
@@ -49,22 +50,26 @@ export class HomebridgeTedeePlatform implements DynamicPlatformPlugin {
     return this._server;
   }
 
+  /**
+   * The platform logger. Every line, at every level, is formatted first and then has the API key
+   * and any api_token removed, so neither can reach the Homebridge log, also not in debug output,
+   * error objects or stack traces. Homebridge versions before 1.8.0 have no `log.success`;
+   * the wrapper falls back to `log.info` for them.
+   */
+  public readonly log: Logger;
+
   constructor(
-    public readonly log: Logger,
+    log: Logger,
     public readonly config: PlatformConfig,
     public readonly api: API,
   ) {
+    this.log = createRedactingLogger(log, createSecretRedactor(() => [this.config.apiKey]));
+
     this.config.timeout = config.timeout || 10000;
     this.config.maximumApiRetry = config.maximumApiRetry || 3;
     this.config.webhookPort = config.webhookPort || 3003;
 
     this.log.debug('Finished initializing platform:', this.config.name);
-
-    // Homebridge 1.8.0 introduced a `log.success` method that can be used to log success messages
-    // For users that are on a version prior to 1.8.0, we need a 'polyfill' for this method
-    if (!log.success) {
-      log.success = log.info;
-    }
 
     // When this event is fired it means Homebridge has restored all cached accessories from disk.
     // Dynamic Platform plugins should only register new accessories after this event was fired,
@@ -241,7 +246,7 @@ export class HomebridgeTedeePlatform implements DynamicPlatformPlugin {
     );
 
     this.saveAddr(ip);
-    this.log.debug(`Initialized API client with IP ${ip} and API key ${this.config.apiKey}`);
+    this.log.debug(`Initialized API client with IP ${ip}`);
   }
 
 
