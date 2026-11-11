@@ -7,7 +7,7 @@ import os from 'os';
 import {createServer, IncomingMessage, Server, ServerResponse} from 'http';
 import {WebhookPayload} from './clients/models/webhook-payload';
 import Evilscan from 'evilscan';
-import fs from 'fs';
+import {saveBridgeIp} from './configWriter';
 import {createRedactingLogger, createSecretRedactor} from './redaction';
 
 /**
@@ -400,34 +400,8 @@ export class HomebridgeTedeePlatform implements DynamicPlatformPlugin {
     return null;
   }
 
-  saveAddr(addr) {
-    fs.readFile(this.api.user.configPath(), 'utf8', (err, data) => {
-      if (err) {
-        this.log.debug('Failed to read config file:', err);
-        return;
-      }
-      // Parse the current configuration
-      let config = JSON.parse(data);
-
-      // Find the platform with "platform" key equals "TedeeBridge"
-      let targetPlatform = config.platforms.find(p => p.platform === PLATFORM_NAME);
-      if (targetPlatform) {
-        targetPlatform.bridgeIp = addr;
-        this.log.debug('Updated config with new IP:', targetPlatform.bridgeIp);
-      } else {
-        this.log.debug('No matching platform found.');
-        return;
-      }
-
-      // Write the modified configuration back to the file
-      fs.writeFile(this.api.user.configPath(), JSON.stringify(config, null, 4), (err) => {
-        if (err) {
-          this.log.debug('Failed to write updated config file:', err);
-        } else {
-          this.log.debug('Configuration updated successfully!');
-        }
-      });
-    });
+  saveAddr(addr: string) {
+    saveBridgeIp(this.api.user.configPath(), this.config, addr, (...args) => this.log.debug(args.map(String).join(' ')));
   }
 
   public async handleWebhook(req: IncomingMessage, res: ServerResponse): Promise<void> {

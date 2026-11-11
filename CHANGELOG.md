@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.0.3
+
+### Fixed
+
+- With two or more Tedee bridge entries in `config.json`, a bridge that connected wrote its IP into the first `TedeeBridge` entry instead of its own, so the other bridge's `bridgeIp` was overwritten and its requests failed with 401. The IP is now saved only into the entry of the instance that discovered it, identified by its child bridge username (`_bridge.username`), or else by name plus API key. If the entry cannot be identified with certainty, nothing is written.
+- The IP is written only when it differs from the stored one. The config is re-read right before the write, only this entry's `bridgeIp` changes, and the file is replaced atomically (temp file plus rename) with its permissions kept.
+
 ## 2.0.2
 
 ### Security
