@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.0.4
+
+### Fixed
+
+- 2.0.3 never saved a changed bridge IP under Homebridge: Homebridge removes `_bridge` from the platform config before the plugin is constructed, so the matching on `_bridge.username` rejected every entry that has one. The own entry is now found by name plus API key (compared by hash) and must match exactly one entry; `_bridge` is ignored. If it is not unique, nothing is written.
+- A symlinked `config.json` stays a symlink: the real file is resolved and the temp file is written next to it. The original mode and owner are kept. The write is still atomic and skipped when the IP is unchanged.
+
+### Security
+
+- axios updated from 1.6.0 to 1.21.1 to close the advisories reported by `npm audit` (SSRF, proxy bypass, prototype pollution gadgets and others). `npm audit --audit-level=high` is clean.
+
 ## 2.0.3
 
 ### Fixed

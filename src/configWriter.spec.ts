@@ -7,6 +7,11 @@ import path from 'node:path';
 import {saveBridgeIp} from './configWriter';
 
 const noLog = () => undefined;
+/** What the platform constructor sees: Homebridge has removed _bridge from the config. */
+const own = (e: Record<string, any>) => {
+  const {_bridge, ...rest} = e;
+  return rest;
+};
 
 const entryA = {platform: 'TedeeBridge', name: 'Tedee A', apiKey: 'key-a', bridgeIp: '192.168.1.10', _bridge: {username: '0E:11:11:11:11:11', port: 36001}};
 const entryB = {platform: 'TedeeBridge', name: 'Tedee B', apiKey: 'key-b', bridgeIp: '192.168.1.20', _bridge: {username: '0E:22:22:22:22:22', port: 36002}};
@@ -27,7 +32,7 @@ describe('saveBridgeIp', () => {
 
   it('second instance saves: first entry stays unchanged, own entry is updated', () => {
     write([entryA, other, entryB]);
-    const result = saveBridgeIp(configPath, structuredClone(entryB), '192.168.1.99', noLog);
+    const result = saveBridgeIp(configPath, own(entryB), '192.168.1.99', noLog);
     assert.equal(result, 'updated');
     const platforms = read().platforms;
     assert.deepEqual(platforms[0], entryA);
@@ -37,7 +42,7 @@ describe('saveBridgeIp', () => {
 
   it('first instance saves: second entry stays unchanged', () => {
     write([entryA, entryB]);
-    assert.equal(saveBridgeIp(configPath, structuredClone(entryA), '192.168.1.55', noLog), 'updated');
+    assert.equal(saveBridgeIp(configPath, own(entryA), '192.168.1.55', noLog), 'updated');
     const platforms = read().platforms;
     assert.equal(platforms[0].bridgeIp, '192.168.1.55');
     assert.deepEqual(platforms[1], entryB);
@@ -47,12 +52,12 @@ describe('saveBridgeIp', () => {
     write([entryA, entryB]);
     const before = fs.statSync(configPath).mtimeMs;
     const raw = fs.readFileSync(configPath, 'utf8');
-    assert.equal(saveBridgeIp(configPath, structuredClone(entryB), entryB.bridgeIp, noLog), 'unchanged');
+    assert.equal(saveBridgeIp(configPath, own(entryB), entryB.bridgeIp, noLog), 'unchanged');
     assert.equal(fs.readFileSync(configPath, 'utf8'), raw);
     assert.equal(fs.statSync(configPath).mtimeMs, before);
   });
 
-  it('without _bridge: matches by name plus API key hash', () => {
+  it('entries without _bridge also match by name plus API key hash', () => {
     const a = {...entryA, _bridge: undefined};
     const b = {...entryB, _bridge: undefined};
     write([a, b]);
@@ -66,9 +71,9 @@ describe('saveBridgeIp', () => {
     write([entryA, entryB]);
     const raw = fs.readFileSync(configPath, 'utf8');
     // same name, wrong key
-    assert.equal(saveBridgeIp(configPath, {name: 'Tedee B', apiKey: 'other', _bridge: undefined}, '10.0.0.3', noLog), 'skipped');
-    // unknown username
-    assert.equal(saveBridgeIp(configPath, {name: 'Tedee B', apiKey: 'key-b', _bridge: {username: '0E:99:99:99:99:99'}}, '10.0.0.3', noLog), 'skipped');
+    assert.equal(saveBridgeIp(configPath, {name: 'Tedee B', apiKey: 'other'}, '10.0.0.3', noLog), 'skipped');
+    // unknown name
+    assert.equal(saveBridgeIp(configPath, {name: 'Tedee C', apiKey: 'key-b'}, '10.0.0.3', noLog), 'skipped');
     // no name or key at all
     assert.equal(saveBridgeIp(configPath, {}, '10.0.0.3', noLog), 'skipped');
     assert.equal(fs.readFileSync(configPath, 'utf8'), raw);
@@ -85,7 +90,7 @@ describe('saveBridgeIp', () => {
     write([entryA, entryB]);
     // another writer changed entry A and added a platform after this instance started
     write([{...entryA, bridgeIp: '172.16.0.1'}, entryB, other]);
-    assert.equal(saveBridgeIp(configPath, structuredClone(entryB), '192.168.1.77', noLog), 'updated');
+    assert.equal(saveBridgeIp(configPath, own(entryB), '192.168.1.77', noLog), 'updated');
     const platforms = read().platforms;
     assert.equal(platforms[0].bridgeIp, '172.16.0.1');
     assert.equal(platforms[1].bridgeIp, '192.168.1.77');
@@ -95,13 +100,40 @@ describe('saveBridgeIp', () => {
   it('writes atomically: no temp file left, file mode kept, invalid JSON left untouched', () => {
     write([entryA]);
     fs.chmodSync(configPath, 0o640);
-    assert.equal(saveBridgeIp(configPath, structuredClone(entryA), '10.1.1.1', noLog), 'updated');
+    assert.equal(saveBridgeIp(configPath, own(entryA), '10.1.1.1', noLog), 'updated');
     assert.deepEqual(fs.readdirSync(dir), ['config.json']);
     assert.equal(fs.statSync(configPath).mode & 0o777, 0o640);
 
     fs.writeFileSync(configPath, '{ not json');
-    assert.equal(saveBridgeIp(configPath, structuredClone(entryA), '10.1.1.2', noLog), 'failed');
+    assert.equal(saveBridgeIp(configPath, own(entryA), '10.1.1.2', noLog), 'failed');
     assert.equal(fs.readFileSync(configPath, 'utf8'), '{ not json');
     assert.deepEqual(fs.readdirSync(dir), ['config.json']);
+  });
+
+  it('keeps a symlinked config.json a symlink and writes the real file', () => {
+    const realDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tedee-configwriter-spec-'));
+    try {
+      const realFile = path.join(realDir, 'real-config.json');
+      fs.writeFileSync(realFile, JSON.stringify({platforms: [entryA, entryB]}, null, 4));
+      fs.chmodSync(realFile, 0o600);
+      fs.symlinkSync(realFile, configPath);
+      assert.equal(saveBridgeIp(configPath, own(entryB), '10.9.9.9', noLog), 'updated');
+      assert.ok(fs.lstatSync(configPath).isSymbolicLink());
+      assert.equal(JSON.parse(fs.readFileSync(realFile, 'utf8')).platforms[1].bridgeIp, '10.9.9.9');
+      assert.equal(fs.statSync(realFile).mode & 0o777, 0o600);
+      assert.deepEqual(fs.readdirSync(realDir), ['real-config.json']);
+      assert.deepEqual(fs.readdirSync(dir), ['config.json']);
+    } finally {
+      fs.rmSync(realDir, {recursive: true, force: true});
+    }
+  });
+
+  it('keeps owner and group', () => {
+    write([entryA]);
+    const before = fs.statSync(configPath);
+    assert.equal(saveBridgeIp(configPath, own(entryA), '10.8.8.8', noLog), 'updated');
+    const after = fs.statSync(configPath);
+    assert.equal(after.uid, before.uid);
+    assert.equal(after.gid, before.gid);
   });
 });
