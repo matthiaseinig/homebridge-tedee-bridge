@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.0.6
+
+### Fixed
+
+- The first request after a pause (for example the webhook registration `PUT /callback` at start) failed with ECONNRESET. Node 19 and later keep HTTP connections alive by default, and the Tedee bridge closes idle connections, so a reused socket was already dead. The bridge client now uses its own HTTP agent with keep-alive off, so every request opens a fresh connection, physical actions included.
+- 2.0.5 did not retry any non-GET request after ECONNRESET, so webhook registration failed. Requests are now classified: GET and the webhook setup calls on `/callback` (PUT, POST, DELETE) are retried after any failure, including ECONNRESET and timeouts. Lock, unlock and pull keep the strict rule: retried only if the connection failed before the request was sent (for example ECONNREFUSED), never after a reset, a response or a timeout.
+
 ## 2.0.5
 
 ### Fixed
