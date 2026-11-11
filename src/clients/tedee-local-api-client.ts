@@ -1,5 +1,6 @@
 import axios, {AxiosError, AxiosInstance, InternalAxiosRequestConfig} from 'axios';
 import {createHash} from 'crypto';
+import {Agent} from 'http';
 import {format} from 'util';
 import {CallbackData} from './models/callback-data';
 import {createSecretRedactor, describeError} from '../redaction';
@@ -12,6 +13,9 @@ const sleep = (milliseconds: number) => new Promise<void>(resolve => setTimeout(
 
 /** Error codes where the connection failed before any request bytes were sent. */
 const NOT_SENT_CODES = new Set(['ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN', 'EHOSTUNREACH', 'ENETUNREACH']);
+
+/** Webhook registration endpoints: safe to repeat. */
+const IDEMPOTENT_SETUP_URL = /^\/callback(\/|$)/;
 
 /** JSON for a log line; never throws. */
 function safeStringify(value: unknown): string {
@@ -53,6 +57,9 @@ export class TedeeLocalApiClient {
         accept: 'application/json',
       },
       timeout: timeout,
+      // No keep-alive: Node 19+ reuses sockets by default, but the Tedee bridge closes idle
+      // connections, so the first request after a pause hit a dead socket and got ECONNRESET.
+      httpAgent: new Agent({keepAlive: false}),
     });
 
     // Everything the client reports goes through the redactor, so the key and the api_token
@@ -88,13 +95,15 @@ export class TedeeLocalApiClient {
   }
 
   /**
-   * Safety: lock, unlock and pull are physical, non-idempotent actions. Only GET requests are retried
-   * after any failure. Other methods are retried only when the connection failed before the request
-   * was sent (no response, and a connect level error code). After a response or a timeout the bridge
-   * may already have acted, so the error goes to the caller.
+   * GET requests and the setup calls on /callback (webhook registration; repeating them leaves the
+   * same result) are retried after any failure, including ECONNRESET and timeouts.
+   * Everything else is a physical action (lock, unlock, pull) that must not run twice: it is retried
+   * only when the connection failed before the request was sent (no response, connect level error
+   * code). After a response, a reset or a timeout the bridge may already have acted, so the error
+   * goes to the caller.
    */
   private isRetryable(error: AxiosError, config: InternalAxiosRequestConfig): boolean {
-    if ((config.method ?? 'get').toLowerCase() === 'get') {
+    if ((config.method ?? 'get').toLowerCase() === 'get' || IDEMPOTENT_SETUP_URL.test(config.url ?? '')) {
       return true;
     }
     return !error.response && typeof error.code === 'string' && NOT_SENT_CODES.has(error.code);
