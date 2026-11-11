@@ -12,7 +12,6 @@ export interface OwnEntry {
   name?: string;
   apiKey?: string;
   bridgeIp?: string;
-  _bridge?: { username?: string };
 }
 
 const hash = (value: unknown) => crypto.createHash('sha256').update(String(value ?? '')).digest('hex');
@@ -21,24 +20,17 @@ const hash = (value: unknown) => crypto.createHash('sha256').update(String(value
  * Finds the config entry of this platform instance, or returns null when it cannot be identified
  * with certainty. Never falls back to "the first TedeeBridge entry": with two bridges that
  * overwrote the other bridge's IP and caused 401s.
- *   1. the child bridge username (_bridge.username), if the instance has one
- *   2. otherwise name plus a hash of the apiKey, which must match exactly one entry
+ * Matching is by name plus a hash of the apiKey and must hit exactly one entry. _bridge is
+ * ignored on purpose: Homebridge removes it from the config before the platform constructor runs,
+ * so the instance cannot see its own child bridge username.
  */
 export function findOwnEntry(platforms: Entry[], own: OwnEntry): Entry | null {
-  const candidates = platforms.filter(p => p && p.platform === PLATFORM_NAME);
-
-  const username = own._bridge?.username;
-  if (username) {
-    const byUsername = candidates.filter(p => String(p._bridge?.username ?? '').toLowerCase() === String(username).toLowerCase());
-    return byUsername.length === 1 ? byUsername[0] : null;
-  }
-
   if (!own.name || !own.apiKey) {
     return null;
   }
   const ownHash = hash(own.apiKey);
-  const byIdentity = candidates.filter(p => p.name === own.name && !p._bridge?.username && hash(p.apiKey) === ownHash);
-  return byIdentity.length === 1 ? byIdentity[0] : null;
+  const matches = platforms.filter(p => p && p.platform === PLATFORM_NAME && p.name === own.name && hash(p.apiKey) === ownHash);
+  return matches.length === 1 ? matches[0] : null;
 }
 
 /**
@@ -48,9 +40,12 @@ export function findOwnEntry(platforms: Entry[], own: OwnEntry): Entry | null {
  * renamed over the config, so a crash cannot leave a half written config.json.
  */
 export function saveBridgeIp(configPath: string, own: OwnEntry, addr: string, debug: (...args: unknown[]) => void): SaveResult {
-  const tmpPath = path.join(path.dirname(configPath), `.${path.basename(configPath)}.${process.pid}.${Date.now()}.tmp`);
+  let tmpPath = '';
   try {
-    const raw = fs.readFileSync(configPath, 'utf8');
+    // Write next to the real file so a symlinked config.json stays a symlink.
+    const realPath = fs.realpathSync(configPath);
+    tmpPath = path.join(path.dirname(realPath), `.${path.basename(realPath)}.${process.pid}.${Date.now()}.tmp`);
+    const raw = fs.readFileSync(realPath, 'utf8');
     const config = JSON.parse(raw);
     if (!config || !Array.isArray(config.platforms)) {
       debug('Config has no platforms array; not saving the bridge IP.');
@@ -68,14 +63,28 @@ export function saveBridgeIp(configPath: string, own: OwnEntry, addr: string, de
     }
 
     entry.bridgeIp = addr;
-    const mode = fs.statSync(configPath).mode & 0o777;
-    fs.writeFileSync(tmpPath, JSON.stringify(config, null, 4), {mode});
-    fs.renameSync(tmpPath, configPath);
+    const st = fs.statSync(realPath);
+    const fd = fs.openSync(tmpPath, 'wx', 0o600);
+    try {
+      fs.writeFileSync(fd, JSON.stringify(config, null, 4));
+      fs.fchmodSync(fd, st.mode & 0o7777);
+      try {
+        fs.fchownSync(fd, st.uid, st.gid);
+      } catch {
+        // not permitted to change the owner (not root); keep the current user
+      }
+      fs.fsyncSync(fd);
+    } finally {
+      fs.closeSync(fd);
+    }
+    fs.renameSync(tmpPath, realPath);
     debug('Updated config with new IP:', addr);
     return 'updated';
   } catch (e) {
     try {
-      fs.rmSync(tmpPath, {force: true});
+      if (tmpPath) {
+        fs.rmSync(tmpPath, {force: true});
+      }
     } catch {
       // nothing to clean up
     }
