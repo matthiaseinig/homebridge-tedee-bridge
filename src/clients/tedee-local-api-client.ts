@@ -8,10 +8,29 @@ interface CustomInternalAxiosRequestConfig extends InternalAxiosRequestConfig {
   retriesCount?: number; // Optional property to track retries
 }
 
+const sleep = (milliseconds: number) => new Promise<void>(resolve => setTimeout(resolve, milliseconds));
+
+/** Error codes where the connection failed before any request bytes were sent. */
+const NOT_SENT_CODES = new Set(['ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN', 'EHOSTUNREACH', 'ENETUNREACH']);
+
+/** JSON for a log line; never throws. */
+function safeStringify(value: unknown): string {
+  try {
+    const text = typeof value === 'string' ? value : JSON.stringify(value);
+    return text === undefined ? String(value) : text;
+  } catch {
+    return '[unserializable]';
+  }
+}
+
+const truncate = (text: string, maxLength = 500) => text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
+
 export class TedeeLocalApiClient {
   private client: AxiosInstance;
   private apiKey: string;
   private maxRetries: number;
+  private retryDelayMs: number;
+  private redact: (text: string) => string;
 
   private error: (d) => void;
   private debug: (d) => void;
@@ -23,7 +42,9 @@ export class TedeeLocalApiClient {
     maxRetries: number = 3,
     error?: (d) => void,
     debug?: (d) => void,
+    retryDelayMs: number = 500,
   ) {
+    this.retryDelayMs = retryDelayMs;
     this.apiKey = apiKey;
     this.maxRetries = maxRetries;
     this.client = axios.create({
@@ -37,6 +58,7 @@ export class TedeeLocalApiClient {
     // Everything the client reports goes through the redactor, so the key and the api_token
     // never leave the client in a message, even when the bridge reflects request headers.
     const redact = createSecretRedactor(() => [this.apiKey]);
+    this.redact = redact;
     const errorSink = error ?? ((e) => {
       void (e);
     });
@@ -65,6 +87,19 @@ export class TedeeLocalApiClient {
     return response.data;
   }
 
+  /**
+   * Safety: lock, unlock and pull are physical, non-idempotent actions. Only GET requests are retried
+   * after any failure. Other methods are retried only when the connection failed before the request
+   * was sent (no response, and a connect level error code). After a response or a timeout the bridge
+   * may already have acted, so the error goes to the caller.
+   */
+  private isRetryable(error: AxiosError, config: InternalAxiosRequestConfig): boolean {
+    if ((config.method ?? 'get').toLowerCase() === 'get') {
+      return true;
+    }
+    return !error.response && typeof error.code === 'string' && NOT_SENT_CODES.has(error.code);
+  }
+
   private handleErrorWithRetry(error: AxiosError) {
     const config = error.config as CustomInternalAxiosRequestConfig;
     if (!config) {
@@ -74,28 +109,20 @@ export class TedeeLocalApiClient {
     config.retriesCount = config.retriesCount || 0;
 
     // Check if we should retry the request
-    if (!config || config.retriesCount >= this.maxRetries) {
+    if (config.retriesCount >= this.maxRetries || !this.isRetryable(error, config)) {
       return Promise.reject(error);
     }
 
-    function pause(milliseconds: number) {
-      const dt = Date.now();
-      while (Date.now() - dt <= milliseconds) {
-        /* Do nothing */
-      }
-    }
-
-    pause(500);
-
     this.debug(`Request failed with status code ${error.response?.status}. Retrying...`);
     this.debug(`Retry attempt ${config.retriesCount + 1} of ${this.maxRetries}`);
-    this.debug(JSON.stringify(error.response));
+    // The axios response is circular (it references the request); log status and data only.
+    // Redact the whole serialized body first, then truncate, so a cut can never leave half a key behind.
+    this.debug(`Response status=${error.response?.status} data=${truncate(this.redact(safeStringify(error.response?.data)))}`);
 
     // Increase the retry count
     config.retriesCount += 1;
 
-    // Retry the request
-    return this.client(config);
+    return sleep(this.retryDelayMs).then(() => this.client(config));
   }
 
   private handleError(error) {
