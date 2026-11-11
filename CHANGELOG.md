@@ -9,14 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- HTTP errors from the bridge (for example 401 or 500) are now retried as intended. The retry handler called `JSON.stringify` on the circular axios response, which threw a TypeError, so no retry happened and callers got a TypeError instead of the bridge error. Status and response data are now logged safely (shortened, never throwing).
+- HTTP errors from the bridge (for example 401 or 500) on GET requests are now retried as intended. The retry handler called `JSON.stringify` on the circular axios response, which threw a TypeError, so no retry happened and callers got a TypeError instead of the bridge error. Status and response data are now logged safely (shortened, never throwing).
 - The pause between retries no longer busy-waits for 500 ms and blocks Homebridge; it uses an async sleep.
 - The debug message when the own config entry cannot be identified no longer mentions `_bridge`.
+
+- Safety: only GET requests are retried after an HTTP error or timeout. Lock, unlock and pull (POST/PUT) are physical actions that must not run twice: they are retried only when the connection failed before the request was sent (for example ECONNREFUSED), never after a response or a timeout.
+- The response data in the retry debug log is redacted (API key, api_token) before it is shortened, so truncation cannot leave part of a secret in the log.
 
 ### Changed
 
 - Supported Node.js versions now include ^22 and ^24.
-- axios pinned to 1.21.0 (was 1.21.1 in 2.0.4).
+- axios stays at 1.21.1 (1.21.0 would loosen follow-redirects from ^1.16.2 to ^1.16.0).
 
 ## 2.0.4
 
