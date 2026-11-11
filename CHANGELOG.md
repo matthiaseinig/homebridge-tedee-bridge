@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.0.5
+
+### Fixed
+
+- HTTP errors from the bridge (for example 401 or 500) are now retried as intended. The retry handler called `JSON.stringify` on the circular axios response, which threw a TypeError, so no retry happened and callers got a TypeError instead of the bridge error. Status and response data are now logged safely (shortened, never throwing).
+- The pause between retries no longer busy-waits for 500 ms and blocks Homebridge; it uses an async sleep.
+- The debug message when the own config entry cannot be identified no longer mentions `_bridge`.
+
+### Changed
+
+- Supported Node.js versions now include ^22 and ^24.
+- axios pinned to 1.21.0 (was 1.21.1 in 2.0.4).
+
 ## 2.0.4
 
 ### Fixed

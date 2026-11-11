@@ -54,7 +54,7 @@ export function saveBridgeIp(configPath: string, own: OwnEntry, addr: string, de
 
     const entry = findOwnEntry(config.platforms, own);
     if (!entry) {
-      debug('Could not identify this bridge in the config (no unique _bridge.username or name plus API key match); not saving the bridge IP.');
+      debug('Could not identify this bridge in the config (no unique name plus API key match); not saving the bridge IP.');
       return 'skipped';
     }
     if (entry.bridgeIp === addr) {

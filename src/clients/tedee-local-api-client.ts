@@ -8,10 +8,26 @@ interface CustomInternalAxiosRequestConfig extends InternalAxiosRequestConfig {
   retriesCount?: number; // Optional property to track retries
 }
 
+const sleep = (milliseconds: number) => new Promise<void>(resolve => setTimeout(resolve, milliseconds));
+
+/** JSON for a log line that never throws and stays short. */
+function safeStringify(value: unknown, maxLength = 500): string {
+  try {
+    const text = typeof value === 'string' ? value : JSON.stringify(value);
+    if (text === undefined) {
+      return String(value);
+    }
+    return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
+  } catch {
+    return '[unserializable]';
+  }
+}
+
 export class TedeeLocalApiClient {
   private client: AxiosInstance;
   private apiKey: string;
   private maxRetries: number;
+  private retryDelayMs: number;
 
   private error: (d) => void;
   private debug: (d) => void;
@@ -23,7 +39,9 @@ export class TedeeLocalApiClient {
     maxRetries: number = 3,
     error?: (d) => void,
     debug?: (d) => void,
+    retryDelayMs: number = 500,
   ) {
+    this.retryDelayMs = retryDelayMs;
     this.apiKey = apiKey;
     this.maxRetries = maxRetries;
     this.client = axios.create({
@@ -78,24 +96,15 @@ export class TedeeLocalApiClient {
       return Promise.reject(error);
     }
 
-    function pause(milliseconds: number) {
-      const dt = Date.now();
-      while (Date.now() - dt <= milliseconds) {
-        /* Do nothing */
-      }
-    }
-
-    pause(500);
-
     this.debug(`Request failed with status code ${error.response?.status}. Retrying...`);
     this.debug(`Retry attempt ${config.retriesCount + 1} of ${this.maxRetries}`);
-    this.debug(JSON.stringify(error.response));
+    // The axios response is circular (it references the request); log status and data only.
+    this.debug(`Response status=${error.response?.status} data=${safeStringify(error.response?.data)}`);
 
     // Increase the retry count
     config.retriesCount += 1;
 
-    // Retry the request
-    return this.client(config);
+    return sleep(this.retryDelayMs).then(() => this.client(config));
   }
 
   private handleError(error) {
